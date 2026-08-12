@@ -142,27 +142,33 @@ def resolve_user_id(init_data: str | None, anon_id: str | None) -> str:
     """
     Détermine l'identifiant unique de l'utilisateur pour la base de données.
 
-    - Si TELEGRAM_BOT_TOKEN est configuré : initData DOIT être présent et valide.
-      L'ID Telegram de l'utilisateur (vérifié, infalsifiable) est utilisé.
-    - Sinon (mode dev / test hors Telegram) : on retombe sur un identifiant
-      anonyme envoyé par le navigateur (moins sûr, pratique uniquement en local).
+    - Ouvert depuis Telegram (initData présent) : on VÉRIFIE la signature.
+      Si elle est valide, on utilise l'ID Telegram (sûr, infalsifiable).
+      Si elle est présente mais invalide (signature falsifiée), on refuse.
+    - Ouvert depuis un navigateur classique (site web direct, hors Telegram,
+      pas d'initData du tout) : on retombe sur un identifiant anonyme généré
+      par le navigateur et stocké en local (moins fort, mais permet au site
+      de fonctionner aussi en dehors de Telegram).
     """
-    if TELEGRAM_BOT_TOKEN:
-        if not init_data:
-            raise HTTPException(status_code=401, detail="initData Telegram manquant")
-        parsed = verify_and_parse_init_data(init_data, TELEGRAM_BOT_TOKEN)
-        if not parsed:
-            raise HTTPException(status_code=401, detail="initData Telegram invalide")
-        try:
-            user = json.loads(parsed.get("user", "{}"))
-            telegram_id = user.get("id")
-        except (json.JSONDecodeError, AttributeError):
-            telegram_id = None
-        if not telegram_id:
-            raise HTTPException(status_code=401, detail="Impossible d'identifier l'utilisateur Telegram")
-        return f"tg:{telegram_id}"
+    if init_data:
+        if not TELEGRAM_BOT_TOKEN:
+            # Pas de token configuré côté serveur pour vérifier la signature :
+            # on ne peut pas faire confiance à cet initData, on retombe sur anon.
+            pass
+        else:
+            parsed = verify_and_parse_init_data(init_data, TELEGRAM_BOT_TOKEN)
+            if not parsed:
+                raise HTTPException(status_code=401, detail="initData Telegram invalide")
+            try:
+                user = json.loads(parsed.get("user", "{}"))
+                telegram_id = user.get("id")
+            except (json.JSONDecodeError, AttributeError):
+                telegram_id = None
+            if not telegram_id:
+                raise HTTPException(status_code=401, detail="Impossible d'identifier l'utilisateur Telegram")
+            return f"tg:{telegram_id}"
 
-    # Mode dev sans TELEGRAM_BOT_TOKEN : identifiant anonyme fourni par le client
+    # Hors Telegram (ou pas de TELEGRAM_BOT_TOKEN configuré) : identifiant anonyme
     if not anon_id:
         raise HTTPException(status_code=400, detail="anon_id manquant (mode dev)")
     return f"anon:{anon_id}"
