@@ -1,0 +1,10 @@
+.env
+miniapp/.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.db
+*.db-journal
+*.db-wal
+.DS_Store
