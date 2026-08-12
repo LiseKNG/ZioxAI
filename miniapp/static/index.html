@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>ZioxAI</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* =============================================================
+     THEME TOKENS
+     "telegram" follows the host app automatically (light/dark).
+     Every other theme is a fixed, hand-picked palette applied via
+     inline vars on :root (see THEMES in the script below).
+     ============================================================= */
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg-elevated: var(--tg-theme-secondary-bg-color, #f0f1f4);
+    --text: var(--tg-theme-text-color, #15151a);
+    --hint: var(--tg-theme-hint-color, #8b8d97);
+    --button: var(--tg-theme-button-color, #6C5CE7);
+    --button-text: var(--tg-theme-button-text-color, #ffffff);
+    --accent-a: #7C5CFF;
+    --accent-b: #22D3C8;
+    --divider: color-mix(in srgb, var(--hint) 22%, transparent);
+    --shadow-color: color-mix(in srgb, black 10%, transparent);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    position: relative;
+  }
+
+  /* ---------- Ambient background wash (subtle, theme-tinted) ---------- */
+  .ambient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.10;
+    background:
+      radial-gradient(480px 280px at 12% -6%, var(--accent-a), transparent 60%),
+      radial-gradient(420px 260px at 110% 10%, var(--accent-b), transparent 60%);
+    z-index: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  /* ---------- Header ---------- */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 14px;
+    border-bottom: 1px solid var(--divider);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(10px);
+  }
+
+  .orb {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #000;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--accent-a) 55%, transparent);
+  }
+  .orb img {
+    width: 72%;
+    height: 72%;
+    object-fit: contain;
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .orb.thinking img { animation-duration: 0.9s; }
+
+  .header-text { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
+  .header-name {
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.2px;
+  }
+  .header-status {
+    font-size: 12.5px;
+    color: var(--hint);
+    transition: color 0.2s ease;
+  }
+  .header-status.online::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34c759;
+    margin-right: 5px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #34c759 20%, transparent);
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-elevated);
+    color: var(--hint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.12s ease, background 0.2s ease, color 0.2s ease;
+  }
+  .icon-btn:active { transform: scale(0.9); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Messages ---------- */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    position: relative;
+    z-index: 1;
+    scroll-behavior: smooth;
+  }
+
+  .bubble-row {
+    display: flex;
+    animation: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .bubble-row.user { justify-content: flex-end; }
+  .bubble-row.assistant { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px var(--shadow-color);
+  }
+  .bubble-row.user .bubble {
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    color: #ffffff;
+    border-bottom-right-radius: 5px;
+  }
+  .bubble-row.assistant .bubble {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border-bottom-left-radius: 5px;
+  }
+
+  .empty-state {
+    margin: auto;
+    text-align: center;
+    color: var(--hint);
+    padding: 24px;
+  }
+  .empty-state .orb {
+    margin: 0 auto 16px;
+    width: 56px;
+    height: 56px;
+    animation: float 3.4s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  .empty-state h2 {
+    font-family: "Space Grotesk", sans-serif;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+  .empty-state p { font-size: 14px; margin: 0 0 18px; max-width: 260px; }
+
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 300px;
+  }
+  .suggestion-chip {
+    border: 1px solid var(--divider);
+    background: var(--bg-elevated);
+    color: var(--text);
+    font-size: 13px;
+    padding: 8px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.2s ease;
+  }
+  .suggestion-chip:active { transform: scale(0.95); }
+
+  .typing-dots { display: flex; gap: 4px; padding: 4px 2px; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--hint);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* ---------- Input bar ---------- */
+  .composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--divider);
+    flex-shrink: 0;
+    background: var(--bg);
+    position: relative;
+    z-index: 2;
+  }
+
+  .composer-field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--bg-elevated);
+    border-radius: 22px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+  .composer-field:focus-within {
+    border-color: color-mix(in srgb, var(--accent-a) 45%, transparent);
+  }
+
+  .composer textarea {
+    flex: 1;
+    resize: none;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    padding: 11px 15px;
+    font-size: 15px;
+    font-family: inherit;
+    max-height: 120px;
+    line-height: 1.35;
+  }
+  .composer textarea::placeholder { color: var(--hint); }
+
+  .send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--accent-a) 60%, transparent);
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  .send-btn:active { transform: scale(0.92); }
+  .send-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+  .send-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Theme sheet ---------- */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+    z-index: 10;
+  }
+  .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg);
+    border-radius: 20px 20px 0 0;
+    padding: 10px 18px max(18px, env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 11;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.18);
+  }
+  .sheet.open { transform: translateY(0); }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--divider);
+    border-radius: 999px;
+    margin: 6px auto 14px;
+  }
+
+  .sheet h3 {
+    font-family: "Space Grotesk", sans-serif;
+    margin: 0 0 14px;
+    font-size: 16px;
+  }
+
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .theme-card {
+    border: 1.5px solid var(--divider);
+    border-radius: 14px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.12s ease;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .theme-card:active { transform: scale(0.96); }
+  .theme-card.selected { border-color: var(--accent-a); }
+
+  .theme-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+  }
+
+  .theme-card span { font-size: 12px; }
+
+  /* ---------- Splash screen ---------- */
+  .splash {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.6s ease, visibility 0.6s;
+  }
+  .splash.hide {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .splash-logo-wrap {
+    position: relative;
+    width: 130px;
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .splash-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--accent-a) 35%, transparent);
+    opacity: 0;
+    animation: ringPulse 2.2s ease-out infinite;
+  }
+  .splash-ring:nth-child(2) { animation-delay: 0.5s; }
+  @keyframes ringPulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    30% { opacity: 0.6; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+
+  .splash-logo {
+    width: 92px;
+    height: 92px;
+    object-fit: contain;
+    opacity: 0;
+    transform: scale(0.55) rotate(-20deg);
+    filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent-a) 45%, transparent));
+    animation: splashLogoIn 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes splashLogoIn {
+    0% { opacity: 0; transform: scale(0.55) rotate(-20deg); }
+    65% { opacity: 1; }
+    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+
+  .splash-word {
+    margin-top: 22px;
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #eceef5;
+    opacity: 0;
+    animation: splashWordIn 0.7s ease forwards;
+    animation-delay: 0.85s;
+  }
+  .splash-tagline {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: #6f7180;
+    opacity: 0;
+    animation: splashWordIn 0.7s ease forwards;
+    animation-delay: 1.05s;
+  }
+  @keyframes splashWordIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .splash-logo, .splash-word, .splash-tagline, .splash-ring { animation: none !important; opacity: 1 !important; transform: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="splash" id="splash">
+  <div class="splash-logo-wrap">
+    <div class="splash-ring"></div>
+    <div class="splash-ring"></div>
+    <img class="splash-logo" src="assets/logo-mark.png" alt="ZioxAI" />
+  </div>
+  <div class="splash-word">ZioxAI</div>
+  <div class="splash-tagline">par Omen Studios</div>
+</div>
+
+<div class="app">
+  <div class="ambient" id="ambient"></div>
+
+  <div class="header">
+    <div class="orb" id="headerOrb"><img src="assets/logo-mark.png" alt="ZioxAI" /></div>
+    <div class="header-text">
+      <div class="header-name">ZioxAI</div>
+      <div class="header-status online" id="statusText">en ligne</div>
+    </div>
+    <button class="icon-btn" id="resetBtn" aria-label="Effacer la conversation">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 7h16"/>
+        <path d="M9 7V4h6v3"/>
+        <path d="M6 7l1 13h10l1-13"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="themeBtn" aria-label="Changer de thème">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="13.5" cy="6.5" r="0.6" fill="currentColor" stroke="none"/>
+        <circle cx="17.5" cy="10.5" r="0.6" fill="currentColor" stroke="none"/>
+        <circle cx="8.5" cy="7.5" r="0.6" fill="currentColor" stroke="none"/>
+        <circle cx="6.5" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+        <path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2H17a3 3 0 0 0 3-3c0-5.5-3.6-10-8-10z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="empty-state" id="emptyState">
+      <div class="orb"><img src="assets/logo-mark.png" alt="ZioxAI" /></div>
+      <h2>Salut, c'est ZioxAI 👋</h2>
+      <p>Pose-moi une question ou lance simplement la discussion.</p>
+      <div class="suggestions">
+        <button class="suggestion-chip" data-prompt="Donne-moi 3 idées pour ma journée">3 idées pour ma journée</button>
+        <button class="suggestion-chip" data-prompt="Explique-moi un sujet compliqué simplement">Explique-moi un sujet</button>
+        <button class="suggestion-chip" data-prompt="Aide-moi à rédiger un message">Aide-moi à rédiger</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="composer-field">
+      <textarea id="input" placeholder="Écris un message…" rows="1"></textarea>
+    </div>
+    <button class="send-btn" id="sendBtn" aria-label="Envoyer">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 12L20 4L13 20L11 13L4 12Z" fill="white"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="themeSheet">
+  <div class="sheet-handle"></div>
+  <h3>Choisir un thème</h3>
+  <div class="theme-grid" id="themeGrid"></div>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  // =============================================================
+  // SPLASH SCREEN
+  // Shows the ZioxAI mark animating in, then fades out to reveal chat.
+  // =============================================================
+  const splash = document.getElementById("splash");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const splashDelay = reduceMotion ? 400 : 2000;
+  setTimeout(() => {
+    splash.classList.add("hide");
+    setTimeout(() => splash.remove(), 650);
+  }, splashDelay);
+
+  // =============================================================
+  // THEMES
+  // "telegram" follows the host app's live theme (light/dark) via
+  // --tg-theme-* variables. Every other entry is a fixed palette
+  // applied on :root.
+  // =============================================================
+  const THEMES = {
+    telegram: { name: "Telegram", swatch: "linear-gradient(135deg,#54A9EB,#2AABEE)" },
+    nova: {
+      name: "Nova", swatch: "linear-gradient(135deg,#7C5CFF,#22D3C8)",
+      vars: { "--bg": "#ffffff", "--bg-elevated": "#f1f0fb", "--text": "#171719", "--hint": "#8b8d97",
+              "--button": "#7C5CFF", "--button-text": "#ffffff", "--accent-a": "#7C5CFF", "--accent-b": "#22D3C8" }
+    },
+    sunset: {
+      name: "Sunset", swatch: "linear-gradient(135deg,#FF7A59,#FFC24B)",
+      vars: { "--bg": "#fffaf5", "--bg-elevated": "#fdeee1", "--text": "#2b1c12", "--hint": "#9c8172",
+              "--button": "#FF7A59", "--button-text": "#ffffff", "--accent-a": "#FF7A59", "--accent-b": "#FFC24B" }
+    },
+    mint: {
+      name: "Mint", swatch: "linear-gradient(135deg,#11B39A,#7EE787)",
+      vars: { "--bg": "#f6fbf9", "--bg-elevated": "#e4f4ee", "--text": "#0f2620", "--hint": "#77948a",
+              "--button": "#11B39A", "--button-text": "#ffffff", "--accent-a": "#11B39A", "--accent-b": "#7EE787" }
+    },
+    midnight: {
+      name: "Midnight", swatch: "linear-gradient(135deg,#5B6CFF,#B45CFF)",
+      vars: { "--bg": "#0e0f1a", "--bg-elevated": "#181a2b", "--text": "#eef0ff", "--hint": "#8789a8",
+              "--button": "#5B6CFF", "--button-text": "#ffffff", "--accent-a": "#5B6CFF", "--accent-b": "#B45CFF" }
+    },
+    mono: {
+      name: "Mono", swatch: "linear-gradient(135deg,#3a3a3a,#0a0a0a)",
+      vars: { "--bg": "#0b0b0c", "--bg-elevated": "#1a1a1c", "--text": "#f2f2f3", "--hint": "#8a8a8e",
+              "--button": "#2c2c2e", "--button-text": "#ffffff", "--accent-a": "#c9c9cc", "--accent-b": "#6e6e73" }
+    },
+  };
+
+  const root = document.documentElement;
+  const ambient = document.getElementById("ambient");
+
+  function applyTheme(id) {
+    const theme = THEMES[id] || THEMES.telegram;
+    if (id === "telegram" || !theme.vars) {
+      Object.keys(THEMES.nova.vars).forEach((k) => root.style.removeProperty(k));
+      ambient.style.opacity = 0.10;
+    } else {
+      Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+      ambient.style.opacity = id === "midnight" || id === "mono" ? 0.18 : 0.12;
+    }
+    if (tg?.setHeaderColor && theme.vars) {
+      try { tg.setHeaderColor(theme.vars["--bg"]); } catch (e) {}
+    }
+    localStorage.setItem("zioxai-theme", id);
+    renderThemeGrid(id);
+  }
+
+  function renderThemeGrid(selectedId) {
+    const grid = document.getElementById("themeGrid");
+    grid.innerHTML = "";
+    Object.entries(THEMES).forEach(([id, t]) => {
+      const card = document.createElement("button");
+      card.className = "theme-card" + (id === selectedId ? " selected" : "");
+      card.innerHTML = `<div class="theme-swatch" style="background:${t.swatch}"></div><span>${t.name}</span>`;
+      card.addEventListener("click", () => applyTheme(id));
+      grid.appendChild(card);
+    });
+  }
+
+  const savedTheme = localStorage.getItem("zioxai-theme") || "telegram";
+  applyTheme(savedTheme);
+
+  const themeBtn = document.getElementById("themeBtn");
+  const sheet = document.getElementById("themeSheet");
+  const sheetBackdrop = document.getElementById("sheetBackdrop");
+
+  function openSheet() { sheet.classList.add("open"); sheetBackdrop.classList.add("open"); }
+  function closeSheet() { sheet.classList.remove("open"); sheetBackdrop.classList.remove("open"); }
+
+  themeBtn.addEventListener("click", openSheet);
+  sheetBackdrop.addEventListener("click", closeSheet);
+
+  // =============================================================
+  // IDENTIFICATION UTILISATEUR
+  // Dans Telegram : tg.initData (vérifié côté serveur).
+  // Hors Telegram (test navigateur) : un ID anonyme persistant.
+  // =============================================================
+  async function getAnonId() {
+    let id = localStorage.getItem("zioxai-anon-id");
+    if (!id) {
+      const res = await fetch("/api/anon-id");
+      const data = await res.json();
+      id = data.anon_id;
+      localStorage.setItem("zioxai-anon-id", id);
+    }
+    return id;
+  }
+
+  async function authPayload() {
+    if (tg?.initData) return { init_data: tg.initData };
+    return { anon_id: await getAnonId() };
+  }
+
+  // =============================================================
+  // CHAT
+  // =============================================================
+  const messagesEl = document.getElementById("messages");
+  const emptyState = document.getElementById("emptyState");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("sendBtn");
+  const headerOrb = document.getElementById("headerOrb");
+  const statusText = document.getElementById("statusText");
+
+  let sending = false;
+
+  function autoGrow() {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+  }
+  inputEl.addEventListener("input", autoGrow);
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function clearEmptyState() {
+    document.getElementById("emptyState")?.remove();
+  }
+
+  function addBubble(role, text) {
+    clearEmptyState();
+    const row = document.createElement("div");
+    row.className = "bubble-row " + role;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    scrollToBottom();
+    return bubble;
+  }
+
+  function addTypingIndicator() {
+    const row = document.createElement("div");
+    row.className = "bubble-row assistant";
+    row.id = "typingRow";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    scrollToBottom();
+  }
+
+  function removeTypingIndicator() {
+    document.getElementById("typingRow")?.remove();
+  }
+
+  // Charge l'historique déjà stocké côté serveur pour cet utilisateur
+  async function loadHistory() {
+    try {
+      const auth = await authPayload();
+      const res = await fetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(auth),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.messages?.length) {
+        data.messages.forEach((m) => addBubble(m.role === "user" ? "user" : "assistant", m.content));
+      }
+    } catch (e) {
+      // silencieux : si ça échoue, on part simplement d'une conversation vide
+    }
+  }
+  loadHistory();
+
+  async function sendMessage(overrideText) {
+    const text = (overrideText ?? inputEl.value).trim();
+    if (!text || sending) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    headerOrb.classList.add("thinking");
+    statusText.textContent = "écrit…";
+    statusText.classList.remove("online");
+    tg?.HapticFeedback?.impactOccurred?.("light");
+
+    inputEl.value = "";
+    autoGrow();
+
+    addBubble("user", text);
+    addTypingIndicator();
+
+    try {
+      const auth = await authPayload();
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, ...auth }),
+      });
+
+      removeTypingIndicator();
+
+      if (!res.ok) {
+        addBubble("assistant", "⚠️ Petit souci de connexion, réessaie dans un instant.");
+      } else {
+        const data = await res.json();
+        addBubble("assistant", data.reply);
+      }
+    } catch (e) {
+      removeTypingIndicator();
+      addBubble("assistant", "⚠️ Impossible de joindre ZioxAI. Vérifie ta connexion.");
+    } finally {
+      sending = false;
+      sendBtn.disabled = false;
+      headerOrb.classList.remove("thinking");
+      statusText.textContent = "en ligne";
+      statusText.classList.add("online");
+    }
+  }
+
+  sendBtn.addEventListener("click", () => sendMessage());
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  document.querySelectorAll(".suggestion-chip").forEach((chip) => {
+    chip.addEventListener("click", () => sendMessage(chip.dataset.prompt));
+  });
+
+  // Réinitialiser la conversation (bouton corbeille dans le header)
+  document.getElementById("resetBtn").addEventListener("click", async () => {
+    const doReset = async () => {
+      const auth = await authPayload();
+      await fetch("/api/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(auth),
+      });
+      messagesEl.innerHTML = `
+        <div class="empty-state" id="emptyState">
+          <div class="orb"><img src="assets/logo-mark.png" alt="ZioxAI" /></div>
+          <h2>Salut, c'est ZioxAI 👋</h2>
+          <p>Pose-moi une question ou lance simplement la discussion.</p>
+          <div class="suggestions">
+            <button class="suggestion-chip" data-prompt="Donne-moi 3 idées pour ma journée">3 idées pour ma journée</button>
+            <button class="suggestion-chip" data-prompt="Explique-moi un sujet compliqué simplement">Explique-moi un sujet</button>
+            <button class="suggestion-chip" data-prompt="Aide-moi à rédiger un message">Aide-moi à rédiger</button>
+          </div>
+        </div>`;
+      messagesEl.querySelectorAll(".suggestion-chip").forEach((chip) => {
+        chip.addEventListener("click", () => sendMessage(chip.dataset.prompt));
+      });
+    };
+
+    if (tg?.showConfirm) {
+      tg.showConfirm("Effacer toute la conversation ?", (confirmed) => { if (confirmed) doReset(); });
+    } else if (window.confirm("Effacer toute la conversation ?")) {
+      doReset();
+    }
+  });
+</script>
+</body>
+</html>
