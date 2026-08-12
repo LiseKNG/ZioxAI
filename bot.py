@@ -38,7 +38,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 # URL publique (HTTPS obligatoire) de la mini app déployée, ex:
 # https://ziox-miniapp.up.railway.app
-WEBAPP_URL = os.environ.get("WEBAPP_URL")
+WEBAPP_URL = os.environ.get("https://zioxai-production.up.railway.app")
 
 # Modèle Groq utilisé (gratuit). Tu peux changer pour un autre modèle
 # disponible sur https://console.groq.com/docs/models
